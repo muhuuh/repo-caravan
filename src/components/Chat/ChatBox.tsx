@@ -207,20 +207,17 @@ export function ChatBox({ selectedPupilId, onReportGenerated }: ChatBoxProps) {
         isUser: msg.isUser,
       }));
 
-      const response = await fetch(
-        "https://arani.app.n8n.cloud/webhook/8368aa31-c332-4dd1-99b9-83c36cb432bc",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messages: lastMessages,
-            pupilId: selectedPupilId,
-            teacherId: user?.id,
-          }),
-        }
-      );
+      const response = await fetch(config.suggestionsWebhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: lastMessages,
+          pupilId: selectedPupilId,
+          teacherId: user?.id,
+        }),
+      });
 
       if (!response.ok) throw new Error("Failed to get suggestions");
 

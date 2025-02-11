@@ -15,6 +15,7 @@ import {
   downloadWordDocument,
 } from "../lib/markdownToWord";
 import { AuroraBackground } from "../components/UI/aurora-background";
+import { config } from "../lib/config";
 
 type Mode = "edit" | "correction";
 
@@ -81,9 +82,6 @@ export function ExerciseForge() {
             if (payload.new.teacher_id === user?.id) {
               toast.success("Correction is ready!", {
                 duration: 10000,
-                //autoClose: false,
-                //closeOnClick: true,
-                icon: "📝",
               });
               setIsWaitingForCorrection(false);
               await loadCorrection("correction");
@@ -114,7 +112,6 @@ export function ExerciseForge() {
         },
         async (payload) => {
           if (payload.new.teacher_id === user?.id) {
-            // Fetch the complete exam data
             const { data: newExam } = await supabase
               .from("exams")
               .select("*")
@@ -122,10 +119,8 @@ export function ExerciseForge() {
               .single();
 
             if (newExam) {
-              // Add to cache and list
               examContentCache.current[newExam.id] = newExam.content;
               setExams((prev) => [newExam, ...prev]);
-              // Mark as new
               setNewExamId(newExam.id);
             }
           }
@@ -223,7 +218,6 @@ export function ExerciseForge() {
         return;
       }
 
-      // Clear the new exam highlight when selecting it
       if (newExamId === examId) {
         setNewExamId(null);
       }
@@ -236,7 +230,6 @@ export function ExerciseForge() {
         return;
       }
 
-      // Set all the necessary states
       setSelectedExam(fetchedExam);
       setExamContent(fetchedExam.content);
       setEditableContent(fetchedExam.content);
@@ -246,7 +239,6 @@ export function ExerciseForge() {
       setMode("edit");
       setIsCreatingNew(false);
 
-      // Update cache
       examContentCache.current[examId] = fetchedExam.content;
     } catch (error) {
       console.error("Error loading exam:", error);
@@ -262,7 +254,6 @@ export function ExerciseForge() {
       setEditableContent(examContent);
     } else if (mode === "edit" && newMode === "correction") {
       setExamContent(editableContent);
-      // Only load correction if we haven't loaded it yet
       if (!correction && selectedExam) {
         await loadCorrection(newMode);
       } else {
@@ -283,9 +274,7 @@ export function ExerciseForge() {
           editableContent
         );
         setExamContent(editableContent);
-        // Update cache
         examContentCache.current[selectedExam.id] = editableContent;
-        // Update exam in list without full reload
         updateExamInList(updatedExam);
         toast.success("Exam saved successfully");
       } else if (mode === "correction") {
@@ -344,9 +333,7 @@ export function ExerciseForge() {
           title,
           content,
         });
-        // Cache the new exam content
         examContentCache.current[exam.id] = content;
-        // Add to list without full reload
         addExamToList(exam);
       }
 
@@ -377,22 +364,19 @@ export function ExerciseForge() {
     ]);
 
     try {
-      const response = await fetch(
-        "https://arani.app.n8n.cloud/webhook/5b117600-11a7-4640-967b-e5259872c6f1/chat",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            examId: selectedExam?.id || null,
-            teacherId: user.id,
-            message: message.trim(),
-            mode: isCreatingNew ? "create" : mode,
-            correctionId: correction?.id || null,
-          }),
-        }
-      );
+      const response = await fetch(config.chatWebhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          examId: selectedExam?.id || null,
+          teacherId: user.id,
+          message: message.trim(),
+          mode: isCreatingNew ? "create" : mode,
+          correctionId: correction?.id || null,
+        }),
+      });
 
       if (!response.ok) throw new Error("Failed to get AI response");
 
@@ -409,9 +393,7 @@ export function ExerciseForge() {
         setSelectedExam(exam);
         setExamContent(exam.content);
         setEditableContent(exam.content);
-        // Cache the new exam content
         examContentCache.current[exam.id] = exam.content;
-        // Add to list without full reload
         addExamToList(exam);
         setIsCreatingNew(false);
         toast.success("New exam created!", {
@@ -457,7 +439,6 @@ export function ExerciseForge() {
     setIsWaitingForCorrection(true);
 
     try {
-      // Show immediate notification for submission
       toast.success(
         "Correction request submitted! Processing will begin shortly.",
         {
@@ -466,27 +447,21 @@ export function ExerciseForge() {
         }
       );
 
-      const response = await fetch(
-        "https://arani.app.n8n.cloud/webhook/5b117600-11a7-4640-967b-e5259872c6f1/chat",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            examId: selectedExam.id,
-            teacherId: user.id,
-            mode: "create_correction",
-            message:
-              "Please create a detailed correction of the exam that is helpful, with step by step explanations of the solution steps.",
-          }),
-        }
-      );
+      const response = await fetch(config.chatWebhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          examId: selectedExam.id,
+          teacherId: user.id,
+          mode: "create_correction",
+          message:
+            "Please create a detailed correction of the exam that is helpful, with step by step explanations of the solution steps.",
+        }),
+      });
 
       if (!response.ok) throw new Error("Failed to create correction");
-
-      // This notification will show when the correction is actually ready
-      // (handled by the real-time subscription)
     } catch (error) {
       console.error("Error creating correction:", error);
       toast.error("Failed to create correction");
@@ -504,15 +479,12 @@ export function ExerciseForge() {
     try {
       await database.exams.delete(examId);
 
-      // Clear the exam from cache
       delete examContentCache.current[examId];
 
-      // Update the exams list
       const updatedExams = exams.filter((exam) => exam.id !== examId);
       setExams(updatedExams);
       examListCache.current = updatedExams;
 
-      // If the deleted exam was selected, clear the selection
       if (selectedExam?.id === examId) {
         setSelectedExam(null);
         setExamContent("");
@@ -533,13 +505,11 @@ export function ExerciseForge() {
   const handleTitleChange = async (newTitle: string) => {
     if (!selectedExam) return;
     try {
-      // Only update the title column
       await supabase
         .from("exams")
         .update({ title: newTitle })
         .eq("id", selectedExam.id);
 
-      // Update both the exam list and selected exam
       const updatedExam = { ...selectedExam, title: newTitle };
       updateExamInList(updatedExam);
       setSelectedExam(updatedExam);
@@ -551,7 +521,6 @@ export function ExerciseForge() {
     }
   };
 
-  // Add a new function to handle correction deletion
   const handleCorrectionDelete = async (correctionId: string) => {
     if (!window.confirm("Are you sure you want to delete this correction?")) {
       return;
@@ -560,12 +529,10 @@ export function ExerciseForge() {
     try {
       await database.corrections.delete(correctionId);
 
-      // Clear the correction states
       setCorrection(null);
       setCorrectionContent("");
       setEditableContent("");
 
-      // Switch back to edit mode since correction is deleted
       setMode("edit");
 
       toast.success("Correction deleted successfully");
